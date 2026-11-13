@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finanzplaner</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --text: #0b0b0b;
+    --text-2: #52514e;
+    --muted: #898781;
+    --line: #e1e0d9;
+    --border: rgba(11, 11, 11, 0.10);
+    --track: #efeee9;
+    --good-text: #006300;
+    --critical: #d03b3b;
+    --neutral: #b5b3aa;
+    --c-fix: #2a78d6;
+    --c-haushalt: #eb6834;
+    --c-abos: #1baf7a;
+    --c-essen: #eda100;
+    --c-hygiene: #e87ba4;
+    --c-freizeit: #008300;
+    --c-sparen: #6250d6;
+    --c-income: #0b0b0b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --text: #f0efec;
+      --text-2: #c3c2b7;
+      --muted: #898781;
+      --line: #2c2c2a;
+      --border: rgba(255, 255, 255, 0.10);
+      --track: #262624;
+      --good-text: #0ca30c;
+      --critical: #e66767;
+      --neutral: #5a5954;
+      --c-fix: #3987e5;
+      --c-haushalt: #d95926;
+      --c-abos: #199e70;
+      --c-essen: #c98500;
+      --c-hygiene: #d55181;
+      --c-freizeit: #008300;
+      --c-sparen: #9085e9;
+      --c-income: #f0efec;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 48px 20px 80px; }
+
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 32px; }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  h2 { font-size: 13px; font-weight: 500; color: var(--muted); margin: 0 0 16px; letter-spacing: 0.02em; text-transform: uppercase; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+  section { margin-top: 16px; }
+
+  /* Kennzahlen */
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .tile .label { font-size: 13px; color: var(--muted); }
+  .tile .value { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; margin-top: 4px; }
+  .tile .sub { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+  .tile.neg .value { color: var(--critical); }
+
+  /* Geldfluss */
+  #flow { position: relative; }
+  #flow svg { display: block; width: 100%; overflow: visible; }
+  #flow .ribbon { opacity: 0.32; transition: opacity 0.12s; cursor: default; }
+  #flow .ribbon:hover, #flow .ribbon.on { opacity: 0.62; }
+  #flow text { font-size: 13px; fill: var(--text); }
+  #flow text .amt, #flow text.amt { fill: var(--text-2); font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  .tip {
+    position: absolute; pointer-events: none; z-index: 2;
+    background: var(--text); color: var(--surface);
+    padding: 7px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.35;
+    white-space: nowrap; opacity: 0; transition: opacity 0.1s;
+  }
+  .tip b { font-weight: 600; }
+
+  /* Aufteilung */
+  .rows { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 9px; }
+  .row { display: grid; grid-template-columns: 150px 1fr 96px 48px; align-items: center; gap: 12px; font-size: 14px; }
+  .row .name { display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+  .bar { height: 6px; background: var(--track); border-radius: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 4px; min-width: 2px; }
+  .row .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .row .pct { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+
+  /* Sparen */
+  .save { display: grid; grid-template-columns: 1.1fr 1fr; gap: 32px; align-items: center; }
+  .save .big { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+  .save .lead { color: var(--text-2); margin: 0 0 6px; }
+  .save .note { color: var(--text-2); font-size: 14px; margin: 10px 0 0; }
+  .save .note b { color: var(--text); font-weight: 600; }
+  .rule { display: grid; gap: 14px; }
+  .rule .head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+  .rule .head span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .meter { position: relative; height: 6px; background: var(--track); border-radius: 4px; }
+  .meter i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--text); max-width: 100%; }
+  .meter u { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--muted); border-radius: 1px; }
+  .rule small { color: var(--muted); font-size: 12px; }
+
+  /* Eingabe */
+  .inputs-head { display: flex; align-items: baseline; justify-content: space-between; margin: 40px 2px 14px; }
+  .inputs-head h2 { margin: 0; }
+  .cats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .cat { padding: 18px 18px 14px; }
+  .cat-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+  .cat-head .title { font-weight: 600; font-size: 15px; }
+  .cat-head .sum { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .cat .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
+  .item { display: grid; grid-template-columns: 1fr 104px 26px; gap: 6px; align-items: center; border-top: 1px solid var(--line); }
+  .item input {
+    font: inherit; color: var(--text); background: transparent; border: 0; outline: 0;
+    padding: 9px 6px; border-radius: 6px; width: 100%; min-width: 0;
+  }
+  .item input:hover { background: var(--track); }
+  .item input:focus { background: var(--track); box-shadow: inset 0 0 0 1.5px var(--text-2); }
+  .item input::placeholder { color: var(--muted); }
+  .item .amount { position: relative; }
+  .item .amount input { text-align: right; padding-right: 22px; font-variant-numeric: tabular-nums; }
+  .item .amount::after { content: "€"; position: absolute; right: 7px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  .del { color: var(--muted); width: 26px; height: 26px; border-radius: 6px; font-size: 16px; line-height: 1; }
+  .del:hover { background: var(--track); color: var(--critical); }
+  .add { color: var(--text-2); font-size: 13.5px; padding: 8px 6px; border-radius: 6px; margin-top: 4px; border-top: 1px solid var(--line); width: 100%; text-align: left; border-radius: 0 0 6px 6px; }
+  .add:hover { color: var(--text); background: var(--track); }
+  .link { color: var(--muted); font-size: 13px; padding: 4px 8px; border-radius: 6px; }
+  .link:hover { color: var(--text); background: var(--track); }
+  footer { margin-top: 36px; color: var(--muted); font-size: 12.5px; text-align: center; }
+
+  @media (max-width: 720px) {
+    main { padding: 28px 14px 60px; }
+    .tiles { grid-template-columns: 1fr; gap: 10px; }
+    .tile { display: grid; grid-template-columns: 1fr auto; align-items: baseline; padding: 16px 18px; }
+    .tile .value { font-size: 22px; grid-row: span 2; margin: 0; }
+    .tile .sub { grid-column: 1; }
+    .save { grid-template-columns: 1fr; gap: 24px; }
+    .cats { grid-template-columns: 1fr; }
+    .row { grid-template-columns: 112px 1fr 84px; }
+    .row .pct { display: none; }
+    .card { padding: 18px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Finanzplaner</h1>
+      <p>Dein Monat auf einen Blick</p>
+    </div>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section class="card">
+    <h2>Geldfluss pro Monat</h2>
+    <div id="flow"></div>
+    <div class="rows" id="rows"></div>
+  </section>
+
+  <section class="card">
+    <h2>Sparpotenzial</h2>
+    <div class="save" id="save"></div>
+  </section>
+
+  <div class="inputs-head">
+    <h2>Deine Zahlen</h2>
+    <button class="link" id="reset">Alles leeren</button>
+  </div>
+  <div class="cats" id="cats"></div>
+
+  <footer>Alle Angaben bleiben lokal in deinem Browser gespeichert.</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var STORE = 'finanzplaner.v1';
+
+  var CATS = [
+    { id: 'income',   name: 'Einkommen',       color: 'var(--c-income)',   hint: 'Gehalt, Nebenjob, Kindergeld …' },
+    { id: 'fix',      name: 'Fixe Ausgaben',   color: 'var(--c-fix)',      hint: 'Miete, Strom, Versicherungen, Handy …' },
+    { id: 'haushalt', name: 'Haushalt',        color: 'var(--c-haushalt)', hint: 'Putzmittel, Reparaturen, Anschaffungen …' },
+    { id: 'abos',     name: 'Abos',            color: 'var(--c-abos)',     hint: 'Streaming, Fitnessstudio, Software …' },
+    { id: 'essen',    name: 'Essen',           color: 'var(--c-essen)',    hint: 'Lebensmittel, Kantine, Lieferdienst …' },
+    { id: 'hygiene',  name: 'Hygiene',         color: 'var(--c-hygiene)',  hint: 'Drogerie, Friseur, Pflege …' },
+    { id: 'freizeit', name: 'Freizeit',        color: 'var(--c-freizeit)', hint: 'Ausgehen, Hobbys, Reisen …' },
+    { id: 'sparen',   name: 'Sparen',          color: 'var(--c-sparen)',   hint: 'Was du fest zurücklegst: Notgroschen, ETF …' }
+  ];
+
+  var EXAMPLE = {
+    income:   [['Gehalt (netto)', 2800]],
+    fix:      [['Miete', 950], ['Strom & Internet', 110], ['Versicherungen', 85]],
+    haushalt: [['Haushaltswaren', 60]],
+    abos:     [['Streaming', 25], ['Fitnessstudio', 35]],
+    essen:    [['Lebensmittel', 320], ['Auswärts essen', 80]],
+    hygiene:  [['Drogerie', 40]],
+    freizeit: [['Ausgehen & Hobbys', 200]],
+    sparen:   [['Notgroschen', 200]]
+  };
+
+  function fromPairs(src) {
+    var s = {};
+    CATS.forEach(function (c) {
+      s[c.id] = (src[c.id] || []).map(function (p) { return { name: p[0], amount: p[1] }; });
+    });
+    return s;
+  }
+  function emptyState() {
+    var s = {};
+    CATS.forEach(function (c) { s[c.id] = [{ name: '', amount: 0 }]; });
+    return s;
+  }
+  function load() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(STORE));
+      if (raw && typeof raw === 'object') {
+        var s = {};
+        CATS.forEach(function (c) {
+          s[c.id] = Array.isArray(raw[c.id]) ? raw[c.id].map(function (i) {
+            return { name: String(i.name || ''), amount: Number(i.amount) || 0 };
+          }) : [];
+        });
+        return s;
+      }
+    } catch (e) {}
+    return fromPairs(EXAMPLE);
+  }
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
+  }
+
+  var state = load();
+
+  /* ---------- Zahlen ---------- */
+  var eur0 = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+  var eur2 = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+  var num = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 });
+  function money(v) { return (Math.abs(v % 1) > 0.004 ? eur2 : eur0).format(v); }
+  function pct(v) { return Math.round(v * 100) + ' %'; }
+
+  function parseAmount(str) {
+    var s = String(str).replace(/[€\s]/g, '');
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    var v = parseFloat(s);
+    return isFinite(v) && v > 0 ? v : 0;
+  }
+  function sum(id) {
+    return state[id].reduce(function (a, i) { return a + i.amount; }, 0);
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+    });
+  }
+
+  function totals() {
+    var t = { by: {} };
+    CATS.forEach(function (c) { t.by[c.id] = sum(c.id); });
+    t.income = t.by.income;
+    t.spend = 0;
+    CATS.forEach(function (c) { if (c.id !== 'income' && c.id !== 'sparen') t.spend += t.by[c.id]; });
+    t.saving = t.by.sparen;
+    t.left = t.income - t.spend - t.saving;
+    t.potential = t.income - t.spend;
+    return t;
+  }
+
+  /* ---------- Kennzahlen ---------- */
+  function renderTiles(t) {
+    var neg = t.left < -0.004;
+    document.getElementById('tiles').innerHTML =
+      tile('Einkommen', money(t.income), 'pro Monat') +
+      tile('Ausgaben', money(t.spend), t.income > 0 ? pct(t.spend / t.income) + ' des Einkommens' : 'ohne Sparen') +
+      tile(neg ? '⚠ Fehlbetrag' : 'Übrig', money(t.left),
+           neg ? 'Du planst mehr ein, als reinkommt' : 'nach Ausgaben und Sparen', neg);
+  }
+  function tile(label, value, sub, neg) {
+    return '<div class="card tile' + (neg ? ' neg' : '') + '"><div class="label">' + label +
+      '</div><div class="value">' + value + '</div><div class="sub">' + sub + '</div></div>';
+  }
+
+  /* ---------- Geldfluss (Sankey) ---------- */
+  function targets(t) {
+    var list = [];
+    CATS.forEach(function (c) {
+      if (c.id !== 'income' && t.by[c.id] > 0) list.push({ name: c.name, value: t.by[c.id], color: c.color });
+    });
+    if (t.left > 0.004) list.push({ name: 'Übrig', value: t.left, color: 'var(--neutral)' });
+    return list;
+  }
+
+  function renderFlow(t) {
+    var el = document.getElementById('flow');
+    var list = targets(t);
+    var out = t.spend + t.saving;
+    var total = Math.max(t.income, out);
+    if (total <= 0) {
+      el.innerHTML = '<div class="empty">Trag unten dein Einkommen und deine Ausgaben ein.</div>';
+      return;
+    }
+    var W = Math.max(el.clientWidth, 280);
+    var wide = W >= 560;
+    var nodeW = 10, slotMin = 22, gap = 6, pad = 6;
+    var padL = wide ? 118 : 0;
+    var padR = wide ? 190 : 172;
+    var leftH = wide ? 280 : 220;
+    var xl = padL + nodeW, xr = W - padR, xm = (xl + xr) / 2;
+
+    var rightH = 0;
+    list.forEach(function (n) {
+      n.h = Math.max(n.value / total * leftH, 2);
+      n.slot = Math.max(n.h, slotMin);
+      rightH += n.slot;
+    });
+    rightH += gap * (list.length - 1);
+    var H = Math.max(leftH, rightH) + pad * 2;
+    var ly = (H - leftH) / 2;
+    var ry = (H - rightH) / 2;
+
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" height="' + H + '" role="img" aria-label="Geldfluss vom Einkommen in die Kategorien">';
+
+    // Bänder
+    var acc = 0, y = ry, nodes = '', labels = '';
+    list.forEach(function (n, i) {
+      var a0 = ly + acc / total * leftH;
+      acc += n.value;
+      var a1 = ly + acc / total * leftH;
+      var b0 = y + (n.slot - n.h) / 2, b1 = b0 + n.h;
+      svg += '<path class="ribbon" data-i="' + i + '" fill="' + n.color + '" d="M' + xl + ',' + a0 +
+        'C' + xm + ',' + a0 + ' ' + xm + ',' + b0 + ' ' + xr + ',' + b0 +
+        'L' + xr + ',' + b1 + 'C' + xm + ',' + b1 + ' ' + xm + ',' + a1 + ' ' + xl + ',' + a1 + 'Z"/>';
+      nodes += '<rect x="' + xr + '" y="' + b0 + '" width="' + nodeW + '" height="' + n.h + '" rx="' + Math.min(3, n.h / 2) + '" fill="' + n.color + '"/>';
+      labels += '<text x="' + (xr + nodeW + 10) + '" y="' + (y + n.slot / 2) + '" dominant-baseline="central">' +
+        esc(n.name) + '<tspan class="amt" dx="8">' + money(n.value) + '</tspan></text>';
+      y += n.slot + gap;
+    });
+
+    // Quelle
+    var incH = t.income / total * leftH;
+    if (incH > 0) svg += '<rect x="' + padL + '" y="' + ly + '" width="' + nodeW + '" height="' + incH + '" rx="3" fill="var(--c-income)"/>';
+    if (out > t.income + 0.004) {
+      var gy = ly + incH + (incH > 0 ? 2 : 0);
+      svg += '<rect x="' + padL + '" y="' + gy + '" width="' + nodeW + '" height="' + Math.max(leftH - incH - (incH > 0 ? 2 : 0), 2) + '" rx="3" fill="var(--critical)"/>';
+      if (wide) svg += '<text x="' + (padL - 12) + '" y="' + Math.min(ly + leftH - 8, gy + (leftH - incH) / 2) + '" text-anchor="end" dominant-baseline="central" class="amt">Fehlbetrag</text>';
+    }
+    if (wide && incH > 30) {
+      svg += '<text x="' + (padL - 12) + '" y="' + (ly + incH / 2 - 9) + '" text-anchor="end" dominant-baseline="central">Einkommen</text>' +
+        '<text x="' + (padL - 12) + '" y="' + (ly + incH / 2 + 9) + '" text-anchor="end" dominant-baseline="central" class="amt">' + money(t.income) + '</text>';
+    }
+    svg += nodes + labels + '</svg><div class="tip"></div>';
+    el.innerHTML = svg;
+
+    var tip = el.querySelector('.tip');
+    el.querySelectorAll('.ribbon').forEach(function (p) {
+      var n = list[+p.getAttribute('data-i')];
+      p.addEventListener('pointermove', function (e) {
+        var r = el.getBoundingClientRect();
+        tip.innerHTML = '<b>' + esc(n.name) + '</b><br>' + money(n.value) +
+          (t.income > 0 ? ' · ' + pct(n.value / t.income) + ' des Einkommens' : '');
+        var x = e.clientX - r.left + 14, yy = e.clientY - r.top - 44;
+        x = Math.min(x, r.width - tip.offsetWidth - 4);
+        tip.style.left = Math.max(0, x) + 'px';
+        tip.style.top = yy + 'px';
+        tip.style.opacity = 1;
+      });
+      p.addEventListener('pointerleave', function () { tip.style.opacity = 0; });
+    });
+  }
+
+  /* ---------- Aufteilung ---------- */
+  function renderRows(t) {
+    var base = Math.max(t.income, t.spend + t.saving);
+    var html = '';
+    targets(t).forEach(function (n) {
+      var share = base > 0 ? n.value / base : 0;
+      html += '<div class="row"><div class="name"><span class="dot" style="background:' + n.color + '"></span>' + esc(n.name) + '</div>' +
+        '<div class="bar"><i style="width:' + (share * 100) + '%;background:' + n.color + '"></i></div>' +
+        '<div class="num">' + money(n.value) + '</div>' +
+        '<div class="pct">' + (t.income > 0 ? pct(n.value / t.income) : '–') + '</div></div>';
+    });
+    var el = document.getElementById('rows');
+    el.innerHTML = html;
+    el.style.display = html ? '' : 'none';
+  }
+
+  /* ---------- Sparpotenzial ---------- */
+  function renderSave(t) {
+    var left, p = t.potential;
+    if (t.income <= 0) {
+      left = '<p class="lead">Trag dein Einkommen ein, um dein Sparpotenzial zu sehen.</p>';
+    } else if (p <= 0.004) {
+      left = '<p class="lead">Aktuell bleibt nichts zum Sparen.</p><div class="big">' + money(0) + '</div>' +
+        '<p class="note">Deine Ausgaben liegen <b>' + money(-p) + '</b> über deinem Einkommen. Schau, wo du kürzen kannst – oft sind Abos und Freizeit der schnellste Hebel.</p>';
+    } else {
+      var free = p - t.saving;
+      var note;
+      if (t.saving <= 0) note = 'Davon ist noch nichts fest eingeplant.';
+      else if (free > 0.004) note = '<b>' + money(t.saving) + '</b> hast du schon eingeplant, <b>' + money(free) + '</b> sind noch frei.';
+      else if (free < -0.004) note = 'Du hast <b>' + money(t.saving) + '</b> eingeplant – das sind <b>' + money(-free) + '</b> mehr, als übrig bleibt.';
+      else note = 'Du hast bereits alles davon fest eingeplant.';
+      left = '<p class="lead">Du könntest jeden Monat bis zu</p><div class="big">' + money(p) + '</div>' +
+        '<p class="note">zurücklegen – das sind ' + pct(p / t.income) + ' deines Einkommens und <b>' + money(p * 12) + '</b> im Jahr. ' + note + '</p>';
+    }
+
+    var need = t.by.fix + t.by.haushalt + t.by.essen + t.by.hygiene;
+    var want = t.by.abos + t.by.freizeit;
+    var right = '<div class="rule">' +
+      meter('Bedarf', need, t.income, 0.5) +
+      meter('Wünsche', want, t.income, 0.3) +
+      meter('Sparen', t.saving, t.income, 0.2) +
+      '<small>Die Markierung zeigt die 50/30/20-Faustregel als Orientierung.</small></div>';
+
+    document.getElementById('save').innerHTML = '<div>' + left + '</div>' + right;
+  }
+  function meter(label, value, income, target) {
+    var share = income > 0 ? value / income : 0;
+    return '<div><div class="head"><span>' + label + '</span><span>' + (income > 0 ? pct(share) : '–') +
+      ' · Richtwert ' + pct(target) + '</span></div>' +
+      '<div class="meter"><i style="width:' + Math.min(share, 1) * 100 + '%"></i><u style="left:calc(' + target * 100 + '% - 1px)"></u></div></div>';
+  }
+
+  /* ---------- Eingabe ---------- */
+  function renderInputs(focus) {
+    var root = document.getElementById('cats');
+    root.innerHTML = '';
+    CATS.forEach(function (c) {
+      var card = document.createElement('div');
+      card.className = 'card cat';
+      card.innerHTML = '<div class="cat-head"><span class="dot" style="background:' + c.color + '"></span>' +
+        '<span class="title">' + c.name + '</span><span class="sum"></span></div><p class="hint">' + c.hint + '</p>';
+      var sumEl = card.querySelector('.sum');
+      function updSum() { sumEl.textContent = money(sum(c.id)); }
+      updSum();
+
+      state[c.id].forEach(function (item, idx) {
+        var row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = '<input type="text" placeholder="Bezeichnung" aria-label="Bezeichnung">' +
+          '<div class="amount"><input type="text" inputmode="decimal" placeholder="0" aria-label="Betrag in Euro"></div>' +
+          '<button class="del" title="Entfernen" aria-label="Position entfernen">×</button>';
+        var name = row.children[0], amount = row.querySelector('.amount input');
+        name.value = item.name;
+        amount.value = item.amount ? num.format(item.amount) : '';
+        name.addEventListener('input', function () { item.name = name.value; save(); });
+        amount.addEventListener('input', function () {
+          item.amount = parseAmount(amount.value);
+          save(); updSum(); renderOutputs();
+        });
+        amount.addEventListener('blur', function () { amount.value = item.amount ? num.format(item.amount) : ''; });
+        amount.addEventListener('focus', function () { amount.select(); });
+        row.querySelector('.del').addEventListener('click', function () {
+          state[c.id].splice(idx, 1);
+          save(); renderInputs(); renderOutputs();
+        });
+        card.appendChild(row);
+        if (focus && focus.id === c.id && idx === state[c.id].length - 1) focus.el = name;
+      });
+
+      var add = document.createElement('button');
+      add.className = 'add';
+      add.textContent = '+ Position hinzufügen';
+      add.addEventListener('click', function () {
+        state[c.id].push({ name: '', amount: 0 });
+        save();
+        var f = { id: c.id };
+        renderInputs(f);
+        if (f.el) f.el.focus();
+      });
+      card.appendChild(add);
+      root.appendChild(card);
+    });
+  }
+
+  function renderOutputs() {
+    var t = totals();
+    renderTiles(t);
+    renderFlow(t);
+    renderRows(t);
+    renderSave(t);
+  }
+
+  document.getElementById('reset').addEventListener('click', function () {
+    if (!confirm('Alle Einträge löschen und von vorn beginnen?')) return;
+    state = emptyState();
+    save(); renderInputs(); renderOutputs();
+  });
+
+  renderInputs();
+  renderOutputs();
+
+  // Diagramm neu zeichnen, sobald sich die verfügbare Breite ändert
+  var flowEl = document.getElementById('flow'), lastW = flowEl.clientWidth;
+  function onWidth() {
+    if (flowEl.clientWidth === lastW) return;
+    lastW = flowEl.clientWidth;
+    renderFlow(totals());
+  }
+  if (window.ResizeObserver) new ResizeObserver(onWidth).observe(flowEl);
+  else window.addEventListener('resize', onWidth);
+})();
+</script>
+</body>
+</html>
